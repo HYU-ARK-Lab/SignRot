@@ -1,0 +1,43 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: Python File",
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/fake_quant",
+      "program": "main.py",
+      "args": "${command:pickArgs}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "justMyCode": false
+    },
+    {
+      // accelerate launch --multi_gpu --num_processes=2 main.py
+      // for debug with accelerate
+      "name": "Python Debugger with accelerate",
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/fake_quant",
+      "program": "${workspaceFolder}/.venv/bin/accelerate",
+      "args": "launch ${command:pickArgs}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "justMyCode": false
+    },
+    {
+      "name": "Benchmark realquant with accelerate",
+      "type": "debugpy",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/.venv/bin/accelerate",
+      "args": "launch ${command:pickArgs}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "justMyCode": false
+    },
+  ]
+}

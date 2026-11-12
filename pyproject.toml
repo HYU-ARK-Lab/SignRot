@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61.0", "cmake>=3.26.1", "torch>=2.9.0,<2.10.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signrot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "torch>=2.9.0,<2.10.0",
+  "transformers==4.57.6",
+  "sentencepiece==0.2.0",
+  "hf-transfer",
+  "datasets==2.17.1",
+  "lm-eval",
+  "protobuf>=6.33.4",
+  "termcolor>=3.3.0",
+  "accelerate>=1.12",
+  "safetensors>=0.7.0",
+  "flash-attn==2.8.3",
+]
+
+[dependency-groups]
+cuda = ["fast-hadamard-transform"]
+dev = ["gpustat>=1.1.1"]
+plot = [
+  "brokenaxes",
+  "ipykernel",
+  "ipywidgets",
+  "matplotlib",
+  "pandas",
+  "openpyxl",
+]
+
+[tool.uv]
+default-groups = ["dev", "cuda", "plot"]
+no-build-isolation-package = ["signrot"]
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "setup.py" },
+  { file = "signrot/kernels/**/*" },
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+]
+fast-hadamard-transform = { path = "./third-party/fast-hadamard-transform", editable = true }
+lm-eval = { git = "https://github.com/EleutherAI/lm-evaluation-harness.git#9b0b15b1ccace3534ffbd13298c569869ce8eaf3" }
+
+# Use exact version to avoid long build time
+# Should match python, cuda and torch version
+# See https://github.com/Dao-AILab/flash-attention/issues/945#issuecomment-2948520692
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.9cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }
+
+
+[tool.uv.extra-build-dependencies]
+fast-hadamard-transform = ["setuptools", "torch>=2.9.0,<2.10.0"]
+signrot = ["setuptools", "torch", "fast-hadamard-transform"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["signrot*"]
+exclude = ["e2e*", "img*", "ctest*", "CMakeFiles*", "fake_quant*"]
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

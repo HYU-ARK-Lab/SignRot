@@ -1,0 +1,133 @@
+# Modified from QuaRot (https://github.com/spcl/QuaRot), Apache License 2.0.
+import math
+from collections import OrderedDict
+
+import torch
+import fast_hadamard_transform
+# Adapted from https://github.com/Cornell-RelaxML/quip-sharp/blob/main/lib/utils/matmul_had.py
+from .hadamard_matrices import (
+    get_had12, get_had20, get_had28, get_had36,
+    get_had40, get_had52, get_had60,
+    get_had108, get_had140, get_had148, get_had156, get_had172
+)
+
+KNOWN_HADAMARD_MATRICES = OrderedDict(
+    [
+        # choose largest known hadamard matrices first
+        # TODO: Fix to choose smallest known hadamard matrix that divides n for performance reasons
+        # - See benchmarks/linear_transform_benchmarks.py
+        (172, get_had172), # llama-2-7b up
+        (156, get_had156), # llama-1-30b 3x hidden
+        (148, get_had148), # qwen-2-7b intermediate
+        (140, get_had140), # llama-1-30b intermediate
+        (108, get_had108), # llama-1-13b intermediate
+        (60, get_had60), # llama-1-13b 3x hidden
+        (52, get_had52),
+        (40, get_had40),
+        (36, get_had36),
+        (28, get_had28), # llama-3 up
+        (20, get_had20),
+        (12, get_had12),
+    ]
+)
+def get_hadK(n, transpose=False):
+    for K in KNOWN_HADAMARD_MATRICES:
+        if n % K == 0 and is_pow2(n // K):
+            hadK = KNOWN_HADAMARD_MATRICES[K]().T if transpose else KNOWN_HADAMARD_MATRICES[K]()
+            return hadK, K
+
+    assert (is_pow2(n)), "No known Hadamard matrix factor found and n is not a power of 2!"
+    return None, 1
+
+
+def matmul_hadU(X, transpose=False, hadK=None, K=None) -> torch.Tensor:
+    n = X.shape[-1]
+    if K is None:
+        hadK, K = get_hadK(n, transpose)
+    input = X.clone().view(-1, n, 1)
+    output = input.clone()
+    while input.shape[1] > K:
+        input = input.view(input.shape[0], input.shape[1] // 2, 2, input.shape[2])
+        output = output.view(input.shape)
+        output[:, :, 0, :] = input[:, :, 0, :] + input[:, :, 1, :]
+        output[:, :, 1, :] = input[:, :, 0, :] - input[:, :, 1, :]
+        output = output.view(input.shape[0], input.shape[1], -1)
+        (input, output) = (output, input)
+    del output
+
+    if K > 1:
+        # Do not explicitly repeat - OOM
+        # input = torch.bmm(
+        #     hadK.repeat(len(input), 1, 1).to(input.device).to(input.dtype), input)
+        # Use bcast instead
+        input = hadK.view(1, K, K).to(input) @ input
+
+    return input.view(X.shape) / torch.tensor(n).sqrt()
+
+
+def matmul_hadUt(X):
+    return matmul_hadU(X, transpose=True)
+
+def random_hadamard_matrix(size, device):
+    # See https://cornell-relaxml.github.io/quip-sharp/ , Section "Randomized Hadamard Transformation"
+    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    Q = Q * 2 - 1
+    Q = torch.diag(Q)
+    return matmul_hadU(Q).to(device)
+
+def matmul_hadU_cuda(X, hadK, K):
+    n = X.shape[-1]
+    if K == 1:
+        return fast_hadamard_transform.hadamard_transform(X.contiguous(), 1.0/torch.tensor(n).sqrt()) 
+    # if transpose:
+    #     hadK = hadK.T.contiguous()
+    input = X.view(*X.shape[:-1], K, n // K)
+    input = fast_hadamard_transform.hadamard_transform(input.contiguous(), 1.0/torch.tensor(n).sqrt())
+    input = hadK.to(input.device).to(input.dtype) @ input
+    return input.reshape(X.shape)
+
+
+
+def matmul_hadUt_cuda(X, hadK, K):
+    return matmul_hadU_cuda(X, hadK, K, transpose=True)
+
+
+def apply_exact_had_to_linear(module, had_dim=-1, output=False):
+    assert isinstance(module, torch.nn.Linear)
+    in_features, out_features = module.in_features, module.out_features
+    
+    if had_dim != -1:
+        assert is_pow2(had_dim), "Hadamard dimension must be a power of 2!"
+    
+    W_ = module.weight.data
+    dtype = W_.dtype
+    dev = W_.device
+    init_shape = W_.shape
+    W_ = W_.float().cuda()
+    
+    if had_dim == -1:
+        if output:
+            had_K, K = get_hadK(out_features)
+            W_ = matmul_hadU_cuda(W_.t(), had_K, K).t()
+        if not output:
+            had_K, K = get_hadK(in_features)
+            W_ = matmul_hadU_cuda(W_, had_K, K)
+    else:
+        # Apply Hadamard to the last had_dim chunks of the weights
+        if output:
+            W_ = W_.t()
+            transposed_shape = W_.shape
+            W_ = fast_hadamard_transform.hadamard_transform(
+                W_.reshape(-1, transposed_shape[-1]//had_dim, had_dim), 
+                scale=1/math.sqrt(had_dim)
+                ).reshape(transposed_shape).t()
+        else:
+            raise NotImplementedError("Not implemented (or tested) yet!")
+            n = W_.shape[1]
+            W_ = hadamard_transform(W_.reshape(-1, n//had_dim, had_dim), scale=1/math.sqrt(had_dim)).reshape(init_shape)
+    module.weight.data = W_.to(device=dev, dtype=dtype)
+
+
+
+def is_pow2(n):
+    return (n & (n - 1) == 0) and (n > 0)

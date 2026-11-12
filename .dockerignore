@@ -1,0 +1,26 @@
+# VCS / venv / build artifacts
+**/.git
+.venv
+build/
+dist/
+**/__pycache__/
+**/*.pyc
+**/*.so
+**/*.egg-info
+**/.ipynb_checkpoints
+
+Dockerfile
+.dockerignore
+
+# Experiment outputs & checkpoints (~1.3TB, untracked) — keep tracked notebooks
+fake_quant/experiments/**
+!fake_quant/experiments/*.ipynb
+!fake_quant/experiments/.gitignore
+
+# Not needed to build or run the Python package
+img/
+third-party/nvbench
+third-party/cutlass/test
+third-party/cutlass/examples
+third-party/cutlass/media
+third-party/cutlass/docs

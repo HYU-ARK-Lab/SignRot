@@ -1,0 +1,8 @@
+{
+  "editor.formatOnSave": false,
+  "jupyter.notebookFileRoot": "${workspaceFolder}/fake_quant",
+  "explorer.fileNesting.patterns": {
+    "rank0.log": "rank*.log"
+  },
+  "git.ignoreLimitWarning": true,
+}
